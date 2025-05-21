@@ -1,0 +1,60 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+Packages and functions
+```{r}
+
+library(psych)
+library(lme4)
+library(nlme)
+library(ggplot2)
+library(dplyr)
+library(emmeans)
+library(Rmisc)
+
+library(clustertend)
+library(factoextra)
+#library(hopkins)
+library(tidyr)
+
+
+library(fpc)
+```
+
+## demos
+```{r, fig.height=3.5,fig.width=8}
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+demos <- read.table(paste(dir, "/babyhippos_demos.csv", sep="") ,sep=",", header = TRUE) 
+
+demos_IAW<-subset(demos, age<26)
+anova(lm(age~diffmag+tsnr+site, data=demos_IAW))
+anova(lm(age~tsnr, data=demos_IAW))
+
+ggplot(demos, aes(x=age)) +
+  geom_histogram(color="steelblue",fill="steelblue", binwidth=1) +
+  theme_classic() +
+  labs(x="age (months)", y="count") +
+  geom_hline(yintercept=0)+
+  theme(axis.title = element_text(size=14), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=12)) +
+  #scale_x_continuous(breaks=c(0, 6, 12, 18, 25), expand=c(0,0)) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,5))+
+  scale_y_continuous(expand=c(0,0)) +
+  geom_vline(xintercept = 6.5, color="black", linetype="dashed") +
+  geom_vline(xintercept = 12.5, color="black", linetype="dashed") +
+  geom_vline(xintercept = 18.5, color="black", linetype="dashed") +
+  geom_vline(xintercept = 25.5, color="black", linetype="dashed") 
+
+
+
+
+```
+
+
+
