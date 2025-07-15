@@ -1,0 +1,87 @@
+---
+title: "Plot Consistency Matrices"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script creates plots of the matrices in Fig. S1F
+
+Input: adjMat.csv and data_cluster_labels.csv
+
+
+# Packages and functions
+```{r}
+
+library(corrplot)
+
+```
+
+# Plot Consistency Matrices 
+
+## Read in the data 
+```{r}
+
+#### read in adjacency matrix. higher values = higher clustering consistency across people
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data_threshMat <- read.csv(paste(dir, "/GitHub/adjMat.csv", sep=""), header = FALSE) 
+
+## read in cluster labels 
+data_cluster_labels <- read.csv(paste(dir, "/GitHub/data_cluster_labels.csv", sep=""), header = TRUE) 
+
+```
+
+## Plot unordered matrix 
+```{r}
+## plot unordered matrix 
+corrplot(as.matrix(data_threshMat),  is.corr=FALSE, method = 'color') ## plot unordered matrix 
+
+```
+
+## Plot matrix ordered by supercluster 
+```{r}
+## add supercluster labels to the matrix so we can order it by supercluster
+data_threshMat$superclusters<-data_cluster_labels$clusters
+
+## reorder the matrix by supercluster 
+data_threshMat_ordered<-data_threshMat[order(data_threshMat[,"superclusters"], decreasing = FALSE),order(data_threshMat[,"superclusters"], decreasing = FALSE)]
+
+## plot ordered matrix 
+corrplot(as.matrix(data_threshMat_ordered),  is.corr=FALSE, method = 'color') ## plot 
+
+```
+
+## Plot thresholded matrix 
+
+Plot only connections with 100% consistency 
+
+```{r}
+## threshold it 
+data_threshMat_ordered_bin <- ifelse(data_threshMat_ordered == 1, 1, 0)
+
+## plot thresholded matrix 
+corrplot(as.matrix(data_threshMat_ordered_bin),  is.corr=FALSE, method = 'color') ## plot 
+
+```
+
+## Inspect consistency values for each supercluster 
+```{r}
+### get rid of diagonal and lower triangle 
+diag(data_threshMat_ordered)<-NA
+data_threshMat_ordered[lower.tri(data_threshMat_ordered)]<-NA
+
+##### break into superclusters to see which connections are consistent across leave-one-out validations 
+xsuperclust_1<-data.frame(data_threshMat_ordered[1:8,1:8])
+xsuperclust_2<-data.frame(data_threshMat_ordered[9:26,9:26])
+xsuperclust_3<-data.frame(data_threshMat_ordered[27:36,27:36])
+xsuperclust_4<-data.frame(data_threshMat_ordered[37:38,37:38])
+xsuperclust_5<-data.frame(data_threshMat_ordered[39:42,39:42])
+xsuperclust_6<-data.frame(data_threshMat_ordered[43:44,43:44])
+
+```
+
+
+
+
+
+
