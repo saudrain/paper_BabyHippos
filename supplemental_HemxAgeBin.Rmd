@@ -1,0 +1,169 @@
+---
+title: "Hemisphere x Age Bin Interactions"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script plots hippocampal connectivity with neocortical clusters identified by a significant hemisphere x age-bin interaction. 
+
+Input: Hippo_BinxHem_F_betas.txt
+
+Output: Plots in Fig S4C
+
+# Packages and functions
+```{r}
+
+library(nlme)
+library(ggplot2)
+library(emmeans)
+library(Rmisc)
+
+```
+# Read in the data 
+```{r}
+
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data <- read.table(paste(dir, "/GitHub/Hippo_BinxHem_F_betas.txt", sep=""), header = TRUE) 
+data <- subset(data, clust < 4) ## when threshold out clusters <10 voxels, top 12
+```
+
+# Plots
+## cluster 1
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="1")
+
+## colour 
+clrs<-c('#fa1111','#fc9a9a') ### cluster 1
+
+## cluster name for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*bin*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("bin","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","bin"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta, fill=hem)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("left", "right"))+ 
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.45), breaks=seq(0,0.45,.1))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## cluster 2
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="2")
+
+## colour 
+clrs<-c('#02ebf7','#a4f9fc') ### cluster 2
+
+## cluster name for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*bin*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("bin","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","bin"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta, fill=hem)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("left", "right"))+ 
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.45), breaks=seq(0,0.45,.1))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## cluster 3
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="3")
+
+## colour 
+clrs<-c('#fc00ec','#ff94f8') ### cluster 3
+
+## cluster name for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*bin*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("bin","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","bin"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta, fill=hem)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("left", "right"))+ 
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.45), breaks=seq(0,0.45,.1))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+
+
+
