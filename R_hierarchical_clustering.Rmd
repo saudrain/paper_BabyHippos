@@ -1,0 +1,201 @@
+---
+title: "Hierarchical Clustering"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script clusters the clusters resulting from a long-axis x age bin interaction into superclusters that share similar profiles of connectivity with the anteroposterior hippocampus (as visualized in Figure 4A)
+
+It also plots several cluster quality checks (including supplemental plots in Fig.S1.B-E)
+
+Input: Hippo_BinxAxis_F_betas.txt
+
+# Packages and functions
+```{r}
+
+library(tidyr)
+library(factoextra)
+library(fpc)
+library(cluster)
+library(cowplot)
+library(nlme)
+library(ggplot2)
+library(Rmisc)
+library(emmeans)
+
+```
+# Cluster the Clusters
+
+## Read in and organize the data 
+```{r}
+
+## read in the data. CHANGE TO YOUR DIRECTORY. 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data <- read.table(paste(dir, "/Hippo_BinxAxis_F_betas.txt", sep=""), header = TRUE) 
+
+### use top 44 for cluster threshold of 10
+data<-subset(data, clust < 45)
+
+## average values to cluster, across subj and hem. 
+data_ag<-aggregate(data[, "beta"], by=(list(data$ax, data$bin, data$clust)), mean)
+colnames(data_ag)<-c("ax","bin","clust","beta")
+
+## add a column that is ax x bin 
+data_ag$cond<-paste(data_ag$ax, data_ag$bin, sep="_bin")
+
+## drop the other columns 
+data_ag2<-data.frame(data_ag[,c("clust","beta","cond")])
+
+## wide format, want one row per cluster. Betas in the cells. 
+data_clust<-spread(data_ag2, cond, beta)
+
+## keep clust as its on label so know the order, but drop it so doesnt get included in the cluster analysis 
+data_cluster_labels<-data.frame(data_clust$clust)
+
+### subtract ant post to get a difference score to cluster
+bin1<-data_clust$ant_bin1 - data_clust$post_bin1
+bin2<-data_clust$ant_bin2 - data_clust$post_bin2
+bin3<-data_clust$ant_bin3 - data_clust$post_bin3
+bin4<-data_clust$ant_bin4 - data_clust$post_bin4
+
+data_ap<-cbind(bin1,bin2,bin3,bin4)
+
+```
+
+## Hierarchical clustering 
+```{r}
+## scale it, as variables with different scales have differing influence over the calculation of distance
+data_clust2<-data.frame(scale(data_ap))
+
+## add cluster labels to data_ap
+data_ap<-cbind(data_cluster_labels, data_ap)
+
+## euclidean distance matrix on the version without the cluster labels 
+distance.matrix <- dist(data_clust2, method="euclidean")
+
+## cluster based on ward's method 
+hierarchical.cluster <- hclust(distance.matrix)
+
+```
+
+## Save cluster solution 
+
+We chose k=6 based on the agglomeration schedule + diagnostic plots below 
+
+```{r}
+
+data_cluster_labels<- data.frame(data_cluster_labels, clusters=cutree(hierarchical.cluster, k=6))
+#write.csv(data_cluster_labels, file = "data_cluster_labels.csv", row.names = FALSE)
+
+data_ap <- data.frame( data_ap, clusters=cutree(hierarchical.cluster, k=6))
+
+```
+
+# Clustser Quality Checks 
+
+## determine how clusterable 
+```{r}
+## determine clusterability 
+res <- get_clust_tendency(data_clust2, n = nrow(data_clust2)-1, graph = FALSE)
+res$hopkins_stat
+
+```
+
+## Plot agglomeration schedule 
+```{r}
+
+#png(file="~/Downloads/test.png", width=2000, height=2000, res=300)
+#Print a reversed Scree plot
+plot(hierarchical.cluster$height, ylab="height", xlab="agglomeration step", main="agglomeration schedule", 
+     cex=2, cex.lab=2, cex.axis=2, cex.main=2.5) ## looks like k=6
+#dev.off()
+
+#Print a table similar to an Agglomeration Schedule
+cbind(hierarchical.cluster$merge, hierarchical.cluster$height)
+
+```
+
+## Plot dendrogram
+```{r}
+
+ fviz_dend(hierarchical.cluster, k=6, k_colors = c("#18e0f2","#152370","#f5e107","#f5200c","#fa750f","#4bf52a"), as.ggplot=TRUE) +
+ theme(plot.title = element_text(size=24, face="bold", hjust=0.5), axis.ticks.x=element_blank()) +
+  theme(axis.title = element_text(size=20, hjust=0.5), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=16)) +
+  #scale_y_continuous(limits = c(-2,10), breaks=seq(0,10,2))+
+  ggtitle("cluster dendrogram") +
+  labs(x="", y="height")
+
+#ggsave("dendrogram.png", path="~/Downloads", width = 6.5, height = 4)
+
+```
+
+## Plot PCA
+```{r}
+
+cols<-c("#152370","#4bf52a","#f5e107","#f5200c","#fa750f","#18e0f2")
+
+clusters<-cutree(hierarchical.cluster, k=6)
+fviz_cluster(list(data = data_clust2, cluster = clusters),
+            ellipse.type = "none",stand = FALSE,
+             palette = cols, ggtheme = theme_classic()) +
+             #scale_shape_manual(values=c("16","16","16","16","16","16"))
+            scale_shape_manual(values=c(19,19,19,19,19,19)) +
+            ggtitle("") +
+            theme(axis.title = element_text(size=20, hjust=0.5), axis.ticks.x=element_blank()) +
+            theme(axis.text=element_text(size=16), legend.position="none")
+
+#ggsave("pca.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+## Assess cluster stats 
+```{r}
+
+cluster.stats(distance.matrix, data_ap$clusters)
+
+```
+
+## Plot silhouette statistics 
+Silhouette value is a measure of how similar an object is to its own cluster (cohesion) compared to other clusters (separation), it ranges from -1 to 1
+
+High numbers indicate object is well matched to its own cluster and poorly matched to neighboring clusters 
+
+Negative means probably belongs in a different cluster 
+
+```{r}
+
+## calculate silhouette
+sil <- silhouette(data_ap$clusters, distance.matrix)
+
+# Summary of silhouette analysis
+si.sum <- summary(sil)
+
+# Average silhouette width of each cluster
+si.sum$clus.avg.widths
+
+neg_sil_index<-which(sil[,'sil_width']<0)
+sil[neg_sil_index, ,drop=FALSE]
+
+## plot silhouettes
+cols<-c("#152370","#4bf52a","#f5e107","#f5200c","#fa750f","#18e0f2")
+p<-fviz_silhouette(sil, print.summary = F) + 
+  scale_colour_manual(values = cols) +
+  scale_fill_manual(values = cols,  labels=c("cingulo-opercular","dorsal frontal parietal", "mPFC-STS", "parahippocampal", "medial parietal", "entorhinal")) + 
+  theme_cowplot() +
+  guides(col=FALSE) +
+  theme(plot.title = element_text(size=24, face="bold", hjust=0.5), axis.ticks.x=element_blank(), legend.position="none") +
+  theme(axis.title = element_text(size=20, hjust=0.5), axis.ticks.x=element_blank()) +
+  theme(axis.text.y=element_text(size=16),axis.text.x=element_text(size=12, angle=90) ) +
+  labs(x="", y="silhouette width")
+p$layers[[2]]$aes_params$colour <- "black"
+p
+
+#ggsave("sil.png", path="~/Downloads", width = 6.5, height = 4)
+
+```
+
+
+
+
+
