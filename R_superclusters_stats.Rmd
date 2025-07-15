@@ -1,0 +1,1340 @@
+---
+title: "Supercluster Statistics"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script calculates a weighted average of data clustered together 100% consistently across leave1out iterations, and runs the statistical comparisons for each supercluster. 
+
+It plots the supercluster connectivity profiles in Figure 4. 
+
+It also runs the statistical analyses and plots for inside vs outside infantile amnesia window comparisons (Figure 5)
+
+Input: threshMat.csv and Hippo_BinxAxis_F_betas.txt
+
+
+# Packages and functions
+```{r}
+
+library(dplyr)
+library(stringr)
+library(emmeans)
+library(ggplot2)
+library(nlme)
+library(car)
+library(Rmisc)
+
+
+```
+
+# Read in and prepare the data 
+```{r}
+
+### specify directory, CHANGE TO YOUR PATH 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+
+#### read in binarized, thresholded matrix. 
+### 1 is where clustering was consistent across all subjects, 0 was inconsistent 
+data_threshMat <- read.csv(paste(dir, "/threshMat.csv", sep=""), header = FALSE) 
+### get rid of diagonal and lower triangle of the binarized matrix 
+diag(data_threshMat)<-0
+data_threshMat[lower.tri(data_threshMat)]<-0
+
+### read in our original data and format it for our purposes 
+data <- read.table(paste(dir, "/Hippo_BinxAxis_F_betas.txt", sep=""), header = TRUE) 
+### keep the top 44 clusters for cluster threshold of 10
+data<-subset(data, clust < 45)
+## collapse over hem for each subj 
+data_ag_hem<-aggregate(data[, "beta"], by=(list(data$subj, data$ax, data$bin, data$clust)), mean)
+colnames(data_ag_hem)<-c("subj","ax","bin","clust","beta")
+
+```
+
+
+# Analyses using leave-one-out cross validation 
+
+## Selectively average ant and post separately 
+
+```{r}
+
+#### specify which clusters/rois go into each supercluster
+supercluster_1<-c(1,6,7,28,34,36,41,43)
+supercluster_2<-c(2,3,9,11,13,14,16,19,20,22,24,30,31,32,37,38,40,44)
+supercluster_3<-c(4,15,17,23,25,26,29,33,35,39)
+supercluster_4<-c(5,10)
+supercluster_5<-c(8,12,27,42)
+supercluster_6<-c(18,21)
+
+### append supercluster info to our dataframe
+data_ag_hem<-mutate(data_ag_hem, supercluster = case_when(clust %in% supercluster_1 ~ 1,
+                                                    clust %in% supercluster_2 ~ 2,
+                                                    clust %in% supercluster_3 ~ 3,
+                                                    clust %in% supercluster_4 ~ 4,
+                                                    clust %in% supercluster_5 ~ 5,
+                                                    clust %in% supercluster_6 ~ 6))
+
+### loop through to create a column of ages and append to our dataframe
+ages<-as.data.frame(c("00mo", "01mo", "02mo", "03mo", "04mo", "05mo", "06mo", "07mo", "08mo", "09mo", "10mo", "11mo", "12mo", "13mo", "14mo", "15mo", "16mo", "17mo", "18mo", "19mo", "20mo", "21mo", "22mo", "23mo", "24mo", "25mo", "26mo"))
+colnames(ages)<-c("age")
+
+for (r in 1:nrow(data_ag_hem)){
+  for (a in 1:nrow(ages))
+
+  if ((str_detect(data_ag_hem[r,"subj"], pattern = ages[a,])) ==TRUE) {
+    data_ag_hem[r,"age"]<-a-1
+  } else if ((str_detect(data_ag_hem[r,"subj"], pattern = "00mo"))) {
+    data_ag_hem[r,"age"]<-0
+  }
+}
+
+### initialize some empty lists to append to later, for each supercluster
+data_sc_1<-data.frame(matrix(nrow=0, ncol=6))
+colnames(data_sc_1)<-c("subj","bin","age","ax","superclust","beta")
+
+data_sc_2<-data.frame(matrix(nrow=0, ncol=6))
+colnames(data_sc_2)<-c("subj","bin","age","ax","superclust","beta")
+
+data_sc_3<-data.frame(matrix(nrow=0, ncol=6))
+colnames(data_sc_3)<-c("subj","bin","age","ax","superclust","beta")
+
+data_sc_4<-data.frame(matrix(nrow=0, ncol=6))
+colnames(data_sc_4)<-c("subj","bin","age","ax","superclust","beta")
+
+data_sc_5<-data.frame(matrix(nrow=0, ncol=6))
+colnames(data_sc_5)<-c("subj","bin","age","ax","superclust","beta")
+
+data_sc_6<-data.frame(matrix(nrow=0, ncol=6))
+colnames(data_sc_6)<-c("subj","bin","age","ax","superclust","beta")
+
+### loop through matrix and when there is a 1, average the two roi hippo-cortical conn values together
+for (r in 1:nrow(data_threshMat)) {
+
+  for (c in 1:ncol(data_threshMat)) {
+
+    if (data_threshMat[r,c]==1){
+
+      #print("yes")
+
+      temp_subset<-subset(data_ag_hem, (clust==r | clust==c))
+
+      ### average across clust
+      temp_agg<-aggregate(temp_subset[, "beta"], by=(list(temp_subset$subj,temp_subset$bin, temp_subset$age, temp_subset$ax, temp_subset$supercluster)), mean)
+      colnames(temp_agg)<-c("subj","bin","age","ax","superclust","beta")
+
+      if (temp_agg[1,"superclust"]=="1") {
+        data_sc_1<-rbind(data_sc_1, temp_agg)
+      }
+
+      if (temp_agg[1,"superclust"]=="2") {
+        data_sc_2<-rbind(data_sc_2, temp_agg)
+      }
+
+      if (temp_agg[1,"superclust"]=="3") {
+        data_sc_3<-rbind(data_sc_3, temp_agg)
+      }
+
+      if (temp_agg[1,"superclust"]=="4") {
+        data_sc_4<-rbind(data_sc_4, temp_agg)
+      }
+
+      if (temp_agg[1,"superclust"]=="5") {
+        data_sc_5<-rbind(data_sc_5, temp_agg)
+      }
+
+      if (temp_agg[1,"superclust"]=="6") {
+        data_sc_6<-rbind(data_sc_6, temp_agg)
+      }
+
+    }
+
+  }
+
+}
+
+### data for each supercluster weighted by consistency across leave-one-out analysis
+data_sc_1<-aggregate(data_sc_1[, "beta"], by=(list(data_sc_1$subj, data_sc_1$bin, data_sc_1$age, data_sc_1$ax)), mean)
+colnames(data_sc_1)<-c("subj","bin","age","ax","beta")
+data_sc_1$supercluster<-1
+
+data_sc_2<-aggregate(data_sc_2[, "beta"], by=(list(data_sc_2$subj, data_sc_2$bin, data_sc_2$age, data_sc_2$ax)), mean)
+colnames(data_sc_2)<-c("subj","bin","age","ax","beta")
+data_sc_2$supercluster<-2
+
+data_sc_3<-aggregate(data_sc_3[, "beta"], by=(list(data_sc_3$subj, data_sc_3$bin, data_sc_3$age, data_sc_3$ax)), mean)
+colnames(data_sc_3)<-c("subj","bin","age","ax","beta")
+data_sc_3$supercluster<-3
+
+## nothing in this one, parahippocampal. Because the ROIs were not clustered together 100% of the time.
+# data_sc_4<-aggregate(data_sc_4[, "beta"], by=(list(data_sc_4$subj, data_sc_4$bin)), mean)
+# colnames(data_sc_4)<-c("subj","bin","beta")
+# data_sc_4$supercluster<-4
+
+data_sc_5<-aggregate(data_sc_5[, "beta"], by=(list(data_sc_5$subj, data_sc_5$bin, data_sc_5$age, data_sc_5$ax)), mean)
+colnames(data_sc_5)<-c("subj","bin","age","ax","beta")
+data_sc_5$supercluster<-5
+
+data_sc_6<-aggregate(data_sc_6[, "beta"], by=(list(data_sc_6$subj, data_sc_6$bin, data_sc_6$age, data_sc_6$ax)), mean)
+colnames(data_sc_6)<-c("subj","bin","age","ax","beta")
+data_sc_6$supercluster<-6
+
+
+#data_LOO<-rbind(data_sc_1,data_sc_2,data_sc_3,data_sc_5,data_sc_6)
+data_SC_all<-rbind(data_sc_1, data_sc_2, data_sc_3, data_sc_5, data_sc_6)
+
+```
+
+
+## Omnibus test across superclusters 
+```{r}
+
+### turn variables into factors 
+data_SC_all$bin<-as.factor(data_SC_all$bin)
+data_SC_all$supercluster<-as.factor(data_SC_all$supercluster)
+
+## model 
+## this model takes forever to run, so can also just read a saved version in using readRDS
+## model is weighted to allow heteroskedasticity 
+#model<-lme(beta ~ ax*bin*supercluster, random= ~1|subj, weights=varIdent(form=~1|bin*ax*supercluster), data=data_SC_all, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) 
+model<-readRDS('/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos/GitHub/mod1_weighted_ax_bin_supercluster.rda') ### CHANGE TO YOUR PATH. OR RUN ABOVE MODEL. 
+
+## model diagnostics 
+hist(residuals(model))
+plot(model)
+
+## stats 
+anova(model) 
+
+#### post hocs
+## these are the pairwise comparisons used in the manuscript 
+## stats for 2 way interactions for each supercluster can be found next to each subplot below 
+emmeans(model, list(pairwise ~ ax|bin|supercluster), adjust = "none")
+emmeans(model, list(pairwise ~ bin|ax|supercluster), adjust = "none")
+
+### save the output, if desired 
+# capture.output(emmeans(model, list(pairwise ~ bin|ax|supercluster), adjust = "fdr"), file="/Users/samanthaaudrain/Documents/Science_Projects/BabyHippos/R_BabyHippos/mod2_weighted_ax_bin_supercluster_emmeans1_fdr.doc")
+# 
+# capture.output(emmeans(model, list(pairwise ~ ax|bin|supercluster), adjust = "fdr"), file="/Users/samanthaaudrain/Documents/Science_Projects/BabyHippos/R_BabyHippos/mod2_weighted_ax_bin_supercluster_emmeans2_fdr.doc")
+
+
+```
+
+
+## Models and Plots
+
+### Cingulo-opercular supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+## prepare the data 
+data_SC<-data_sc_1 ### this is weighted averaged data across component clusters 
+data_SC$bin<-as.factor(data_SC$bin)
+
+## run the model 
+model<-lme(beta ~ ax*bin, random= ~1|subj, weights=varIdent(form=~1|bin), data=data_SC, na.action=na.omit)
+
+## model diagnostics 
+# hist(residuals(model))
+# plot(model)
+
+# stats
+anova(model) 
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/cing_operc.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(stats, aes(x=bin, y=beta, group=ax)) + 
+  geom_line(size=1, aes(linetype="solid", color=ax)) +
+  geom_errorbar(width = .0, aes(ymin=lower_se, ymax=upper_se)) +
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6", "7-12", "13-18","19-25"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_color_manual(values=c('#152370','#6577a1')) +
+  geom_hline(yintercept=0)+
+  # ggtitle("cingulo-opercular
+  # supercluster")+
+  labs(x="age", y="connectivity", color="hippocampal axis")
+#dev.off()
+
+#ggsave("cingulo-operc.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+### Dorsal frontal parietal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+## prepare the data 
+data_SC<-data_sc_2 ### this is weighted averaged data across component clusters 
+data_SC$bin<-as.factor(data_SC$bin)
+
+## run the model 
+model<-lme(beta ~ ax*bin, random= ~1|subj, data=data_SC, na.action=na.omit)
+
+## model diagnostics 
+# hist(residuals(model))
+# plot(model)
+
+## stats 
+anova(model) 
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/dFPN.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(stats, aes(x=bin, y=beta, group=ax)) + 
+  geom_line(size=1, aes(linetype="solid", color=ax)) +
+  geom_errorbar(width = .0, aes(ymin=lower_se, ymax=upper_se)) +
+  theme_classic() +
+     theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6", "7-12", "13-18","19-25"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_color_manual(values=c('#4bf52a','#bdf7b2')) +
+  geom_hline(yintercept=0)+
+  # ggtitle("dorsal frontal parietal
+  # supercluster")+
+  labs(x="age", y="connectivity", color="hippocampal axis")
+#dev.off()
+
+#ggsave("dorsalFPN.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+### mPFC-STS supercluster 
+```{r, fig.height=4,fig.width=4.5}
+
+## prepare the data 
+data_SC<-data_sc_3 ### this is weighted averaged data across component clusters 
+data_SC$bin<-as.factor(data_SC$bin)
+
+## run the model 
+model<-lme(beta ~ ax*bin, random= ~1|subj, data=data_SC, na.action=na.omit)
+
+## model diagnostics 
+# hist(residuals(model))
+# plot(model)
+
+## stats 
+anova(model) 
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/mPFCSTS.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(stats, aes(x=bin, y=beta, group=ax)) + 
+  geom_line(size=1, aes(linetype="solid", color=ax)) +
+  geom_errorbar(width = .0, aes(ymin=lower_se, ymax=upper_se)) +
+  theme_classic() +
+   theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6", "7-12", "13-18","19-25"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_color_manual(values=c('#f2f207','#fafab4')) +
+  geom_hline(yintercept=0)+
+  # ggtitle("vmPFC-STS
+  # supercluster")+
+  labs(x="age", y="connectivity", color="hippocampal axis")
+#dev.off()
+
+#ggsave("vmpfc_sts.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+### Medial parietal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+## prepare the data 
+data_SC<-data_sc_5 ### this is weighted averaged data across component clusters 
+data_SC$bin<-as.factor(data_SC$bin)
+
+## run the model 
+model<-lme(beta ~ ax*bin, random= ~1|subj, data=data_SC, na.action=na.omit)
+
+## model diagnostics 
+# hist(residuals(model))
+# plot(model)
+
+## stats 
+anova(model) 
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/parietal.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(stats, aes(x=bin, y=beta, group=ax)) + 
+  geom_line(size=1, aes(linetype="solid", color=ax)) +
+  geom_errorbar(width = .0, aes(ymin=lower_se, ymax=upper_se)) +
+  theme_classic() +
+   theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6", "7-12", "13-18","19-25"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_color_manual(values=c('#fa750f','#faa666')) +
+  geom_hline(yintercept=0)+
+  # ggtitle("medial parietal
+  # supercluster")+
+  labs(x="age", y="connectivity", color="hippocampal axis")
+#dev.off()
+
+#ggsave("medialparietal.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+### Entorhinal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+## prepare the data 
+data_SC<-data_sc_6 ### this is weighted averaged data across component clusters 
+data_SC$bin<-as.factor(data_SC$bin)
+
+## run the model 
+model<-lme(beta ~ ax*bin, random= ~1|subj, data=data_SC, na.action=na.omit)
+
+## model diagnostics 
+# hist(residuals(model))
+# plot(model)
+
+## stats 
+anova(model) 
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/EC.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(stats, aes(x=bin, y=beta, group=ax)) + 
+  geom_line(size=1, aes(linetype="solid", color=ax)) +
+  geom_errorbar(width = .0, aes(ymin=lower_se, ymax=upper_se)) +
+  theme_classic() +
+   theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6", "7-12", "13-18","19-25"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_color_manual(values=c('#28fcfc','#bfffff')) +
+  geom_hline(yintercept=0)+
+  # ggtitle("entorhinal
+  # supercluster")+
+  labs(x="age", y="connectivity", color="hippocampal axis")
+#dev.off()
+
+#ggsave("entorhinal.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+
+## LOESS plots to visualize continuous data 
+
+Plotting anterior and posterior data separately and overlaid for best visualization 
+
+### Cingulo-opercular supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+SC_data<-subset(data_sc_1, supercluster==1 & ax=="ant")
+
+#tiff("~/Downloads/CP_1.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="#152370") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("cingulo-operc_ant.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+SC_data<-subset(data_sc_1, supercluster==1 & ax=="post")
+
+#tiff("~/Downloads/CP_2.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="#6577a1") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("cingulo-operc_post.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+### both plots overlaid 
+SC_data<-subset(data_sc_1, supercluster==1)
+
+#tiff("~/Downloads/CP_3.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age, group=ax, color=ax)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_smooth(method="loess", level=0.95) + 
+  scale_color_manual(values=c("#152370","#6577a1"))+
+  theme_classic() +
+ theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("cingulo-operc_antpost.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+```
+
+### Dorsal frontal parietal supercluster
+```{r, fig.height=4,fig.width=4.5}
+SC_data<-subset(data_sc_2, supercluster==2 & ax=="ant")
+
+#tiff("~/Downloads/FPN_1.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="#4bf52a") + 
+  theme_classic() +
+ theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("DFP_ant_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+SC_data<-subset(data_sc_2, supercluster==2 & ax=="post")
+
+#tiff("~/Downloads/FPN_2.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="#a2f792") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("DFP_post_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+SC_data<-subset(data_sc_2, supercluster==2)
+
+#tiff("~/Downloads/FPN_3.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age, group=ax, color=ax)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_smooth(method="loess", level=0.95) + 
+  scale_color_manual(values=c("#4bf52a","#bdf7b2"))+
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("DFP_antpost.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+```
+
+### mPFC-STS supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+SC_data<-subset(data_sc_3, supercluster==3 & ax=="ant")
+
+#tiff("~/Downloads/STS_1.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="#f2f207") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("mPFC_ant_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+SC_data<-subset(data_sc_3, supercluster==3 & ax=="post")
+
+#tiff("~/Downloads/STS_2.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="#fafab4") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("mPFC_post_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+SC_data<-subset(data_sc_3, supercluster==3)
+
+#tiff("~/Downloads/STS_3.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age, group=ax, color=ax)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_smooth(method="loess", level=0.95) + 
+  scale_color_manual(values=c("#f2f207","#fafab4"))+
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("mPFC_antpost.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+```
+
+### Medial parietal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+SC_data<-subset(data_sc_5, supercluster==5 & ax=="ant")
+
+#tiff("~/Downloads/parietal_1.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="#fa750f") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("parietal_ant_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+SC_data<-subset(data_sc_5, supercluster==5 & ax=="post")
+
+#tiff("~/Downloads/parietal_2.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="#faa666") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("parietal_post_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+SC_data<-subset(data_sc_5, supercluster==5)
+
+#tiff("~/Downloads/parietal_3.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age, group=ax, color=ax)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_smooth(method="loess", level=0.95) + 
+  scale_color_manual(values=c("#fa750f","#faa666"))+
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("parietal_antpost.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+### Entorhinal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+SC_data<-subset(data_sc_6, supercluster==6 & ax=="ant")
+
+#tiff("~/Downloads/EC_1.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="#28fcfc") + 
+  theme_classic() +
+ theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("entorhinal_ant_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+
+SC_data<-subset(data_sc_6, supercluster==6 & ax=="post")
+
+#tiff("~/Downloads/EC_2.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="#bfffff") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("entorhinal_post_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+SC_data<-subset(data_sc_6, supercluster==6)
+
+#tiff("~/Downloads/EC_3.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(SC_data, aes(y=beta, x=age, group=ax, color=ax)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_smooth(method="loess", level=0.95) + 
+  scale_color_manual(values=c("#28fcfc","#bfffff"))+
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("entorhinal_antpost.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+
+# Analyses without using leave-one-out cross validation 
+
+## Parahippocampal Supercluster 
+As the parahippocampal supercluster was the only one that did not show 100% clustering consistency, we cannot do selective averaging here. So just plot the raw data to see what it looks like. This is not corrected for subject-level bias as the other superclusters are. 
+
+### Models and plot 
+```{r, fig.height=4,fig.width=4.5}
+
+## define the parahippocampal supercluster 
+data_SC<-subset(data_ag_hem, supercluster=="4") 
+
+## next collapse over clusters
+data_SC<-aggregate(data_SC[, "beta"], by=(list(data_SC$subj, data_SC$ax, data_SC$bin)), mean)
+colnames(data_SC)<-c("subj","ax","bin","beta")
+
+## make a factor 
+data_SC$bin<-as.factor(data_SC$bin)
+
+## model it 
+model<-lme(beta ~ ax*bin, random= ~1|subj, data=data_SC, na.action=na.omit, weights=varIdent(form=~1|bin), control = lmeControl(msMaxIter=1000, msMaxEval=1000))
+
+## model diagnostics 
+# hist(residuals(model))
+# plot(model)
+
+## stats
+anova(model) 
+
+## posthocs 
+emmeans(model, list(pairwise ~ ax|bin), adjust = "fdr")
+emmeans(model, list(pairwise ~ bin|ax), adjust = "fdr")
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+#tiff("~/Downloads/test.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(stats, aes(x=bin, y=beta, group=ax)) + 
+  geom_line(size=1, aes(linetype="solid", color=ax)) +
+  geom_errorbar(width = .0, aes(ymin=lower_se, ymax=upper_se)) +
+  theme_classic() +
+  theme(axis.title = element_text(size=24), axis.ticks.x=element_blank(), axis.text=element_text(size=18),
+  plot.title = element_text(size=26, face="bold", hjust=0.5), legend.position="bottom") +
+    theme(text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6", "7-12", "13-18","19-25"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_color_manual(values=c('#f5200c','#fc9288')) +
+  geom_hline(yintercept=0)+
+  # ggtitle("parahippocampal
+  # supercluster")+
+  labs(x="age (months)", y="connectivity", color="hippocampal axis")
+#dev.off()
+#ggsave("parahippocampal.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+### LOESS continuous plots 
+```{r, fig.height=4,fig.width=4.5}
+
+## subset 
+data_SC<-subset(data_ag_hem, supercluster=="4" & ax == "ant") ## it's made up of clusters 5 and 10 
+
+## next collapse over clusters
+data_SC<-aggregate(data_SC[, "beta"], by=(list(data_SC$subj, data_SC$ax, data_SC$age, data_SC$supercluster)), mean)
+colnames(data_SC)<-c("subj","ax", "age", "supercluster","beta")
+
+## plot 
+#tiff("~/Downloads/PH_1.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(data_SC, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="#f5200c") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+##dev.off()
+#ggsave("parahip_ant_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+data_SC<-subset(data_ag_hem, supercluster==4 & ax=="post")
+
+#tiff("~/Downloads/PH_2.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(data_SC, aes(y=beta, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="#fc9288") + 
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("parahip_post_younger.png", path="~/Downloads", width = 4.5, height = 4)
+
+
+
+### both plots overlaid 
+data_SC<-subset(data_ag_hem, supercluster==4)
+
+#tiff("~/Downloads/PH_3.tiff", units="in", width=4.5, height=4, res=1000)
+ggplot(data_SC, aes(y=beta, x=age, group=ax, color=ax)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_smooth(method="loess", level=0.95) + 
+  scale_color_manual(values=c("#f5200c","#fc9288"))+
+  theme_classic() +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=20), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,26), breaks=seq(0,26,5))+
+  labs(y = "connectivity (Fisher z)",
+       x = "age (months)",
+       title = "")
+#dev.off()
+#ggsave("parahip_antpost.png", path="~/Downloads", width = 4.5, height = 4)
+
+```
+
+
+# Compare hippocampal-supercluster connectivity between toddlers and older children
+
+Comparing connectivity of the anterior and posterior hippocampus to each supercluster, between the oldest age bin within the infantile amnesia window (~1.5-2 years old) and children just outside of it (3-6 years)
+
+## Read in and prepare the data
+```{r}
+## read in the data, CHANGE PATHS HERE 
+dir<-"/Users/samanthaaudrain/Documents/Science_Projects/BabyHippos/R_BabyHippos"
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data2 <- read.table(paste(dir, "/supercluster_antpost_betas_by_age.txt", sep=""), header = TRUE)
+data2<- subset(data2, age > 35)
+data2$bin<-"5"
+
+## change roi label from ant_hippo to ant and post to be consistent with other data 
+data2<-mutate(data2, ax= case_when(roi=="ant_hippo" ~ "ant",
+                                        roi=="post_hippo"~ "post"))
+
+## collapse over hem for each subj 
+data2_agg<-aggregate(data2[, "beta"], by=(list(data2$subj, data2$bin, data2$age, data2$ax, data2$supercluster)), mean)
+colnames(data2_agg)<-c("subj","bin","age","ax","supercluster","beta")
+
+## reorder 
+data2_agg<-as.data.frame(cbind(data2_agg$subj, data2_agg$bin, data2_agg$age, data2_agg$ax, data2_agg$beta, data2_agg$supercluster))
+colnames(data2_agg)<-c("subj","bin","age","ax","beta","supercluster")
+
+## remove parahip cluster which doesnt have LOO data to compare to 
+data2_agg_nosc4<-subset(data2_agg, supercluster != 4)
+
+## combine original LOO dataset with the data from the older kids 
+data_LOO<-rbind(data_SC_all, data2_agg_nosc4) 
+
+## make age numeric and subset the data to be just the oldest age bin within infantile amnesia window + the older kids 
+data_LOO$age<-as.numeric(data_LOO$age)
+data_LOO<-subset(data_LOO, ((age>18 & age<26) | age>35))
+
+## specify other variables as factors or numeric 
+data_LOO$supercluster<-as.factor(data_LOO$supercluster)
+data_LOO$beta <- as.numeric(data_LOO$beta)
+
+## create labels for inside and outside infantile amnesia window 
+data_LOO<-data_LOO %>%
+  mutate(amnesia=case_when(age<26 ~ "inside",
+                      age>35 ~ "outside"))
+
+```
+
+## Omnibus 
+```{r}
+
+## model
+model<- lme((beta) ~ ax*amnesia*supercluster, random=~supercluster|subj, weights=varIdent(form=~1|supercluster), data=data_LOO, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) 
+## modeled heteroskedasticity 
+
+## model diagnostics 
+hist(residuals(model))
+plot(model) 
+
+## stats
+anova(model)
+
+## post-hocs 
+emmeans(model, list(pairwise ~ amnesia | supercluster), adjust = "fdr")
+emmeans(model, list(pairwise ~ ax*supercluster), adjust = "fdr")
+
+
+```
+
+### Other models we tried and compared
+
+The model above was the best fit and had the best diagnostics, these weren't used in the end
+```{r}
+# anova(model2,model)
+# model<-lme((beta) ~ ax*amnesia*supercluster, random=~supercluster*amnesia|subj, weights=varIdent(form=~1|supercluster), data=data_ag_hem, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) ## doesnt do better than version where just have supercluster random slope. cant have 3 way random slope. 
+# model<-lme(beta ~ ax*amnesia*supercluster, random=~1|subj, weights=varIdent(form=~1|amnesia*ax*supercluster), data=data_ag_hem, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) ## original model, heteroskedastic and nonlinear and not normal
+# model<-lme(beta ~ ax*amnesia*supercluster, random=~1|subj, weights=varIdent(form=~fitted(.)), data=data_ag_hem, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) ## models variance as a function of the fitted values, didnt help 
+# model<-lme(sqrt(beta+1) ~ ax*amnesia*supercluster, random=~1|subj, data=data_ag_hem, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) ## squrt transform to help with skew didnt help 
+# model<-lme(log(beta+1) ~ ax*amnesia*supercluster, random=~1|subj, data=data_ag_hem, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) ### log to help with skew didn thelp 
+# model<-lme(beta ~ ax*amnesia*supercluster, random=~supercluster|subj, data=data_ag_hem, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit) ## this one helped, adding a random slope for supercluster. But still supercluster a bit heteroskedastic, try adding weights 
+
+
+### diagnostics checked 
+# ## residuals should be normally distributed
+# hist(residuals(model))
+# ##check for homogeneity of variance
+# plot(model) #should look fairly uniform and random
+# leveneTest(residuals(model) ~ data_SC$ax)
+# leveneTest(residuals(model) ~ data_SC$amnesia)
+# shapiro.test(resid(model))
+# icc(model)
+# ## A high ICC suggests that subjects account for a large proportion of variance in beta, meaning subject-level variation is important to model (random intercept for subject). ICC>.2 justifies using a random intercept, if greater than .5 most of the variance is due to subject differences and a mixed model is crucial. If ICC is moderate 0.05-.2 a random intercept model is fine, if ICC is greater than .2 should consider addign random slopes if suspect effect of fixed effects varies by subject. Want to use adjusted ICC. 
+# AIC(model,model2) ## lower, more neg is better 
+# ## check variance structure of each level of amnesia 
+# plot(fitted(model), resid(model), 
+#      col=as.numeric(as.factor(data_SC$amnesia)),  # Convert factor to numeric for colors
+#      pch=19)
+# abline(h=0, lty=2)
+# ## if residuals look unequal, variance structure is needed
+# boxplot(resid(model) ~ amnesia, data=data_SC)
+
+```
+
+## 2 way interactions 
+```{r}
+## next break down model into 2 way interaction. i.e. ax by amnesia for each supercluster 
+## these models were the best fits after some model comparisons 
+
+data_SC<-subset(data_LOO, supercluster=="1")
+model<- lme((beta) ~ ax*amnesia, random=~amnesia|subj,  weights=varIdent(form=~1|ax), data=data_SC, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit)
+anova(model)
+emmeans(model, list(pairwise ~ amnesia*ax), adjust = "fdr")
+
+data_SC<-subset(data_LOO, supercluster=="2")
+model<- lme((beta) ~ ax*amnesia, random=~amnesia|subj,  weights=varIdent(form=~1|ax), data=data_SC, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit)
+anova(model)
+emmeans(model, list(pairwise ~ amnesia*ax), adjust = "fdr")
+
+data_SC<-subset(data_LOO, supercluster=="3")
+model<- lme((beta) ~ ax*amnesia, random=~amnesia|subj,  weights=varIdent(form=~1|ax), data=data_SC, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit)
+anova(model)
+emmeans(model, list(pairwise ~ amnesia*ax), adjust = "fdr")
+
+data_SC<-subset(data_LOO, supercluster=="5")
+model<- lme((beta) ~ ax*amnesia, random=~amnesia|subj, weights=varComb(varIdent(form=~1|ax), varPower(form=~fitted(.))), data=data_SC, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit)
+anova(model)
+emmeans(model, list(pairwise ~ ax), adjust = "fdr")
+
+data_SC<-subset(data_LOO, supercluster=="6")
+model<- lme((beta) ~ ax*amnesia, random=~amnesia|subj,  weights=varIdent(form=~1|ax), data=data_SC, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit)
+anova(model)
+emmeans(model, list(pairwise ~ amnesia*ax), adjust = "fdr")
+
+
+```
+
+## Bar Plots
+### mPFC-STS supercluster 
+```{r, fig.height=4,fig.width=4}
+
+## define the cluster 
+data_SC<-subset(data_LOO, supercluster=="3")
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("amnesia","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/windows_STS.tiff", units="in", width=5, height=4.5, res=1000)
+ggplot(stats, aes(x=amnesia, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  labs(fill="") +
+  scale_fill_manual(values=c('#f2f207','#fafab4'), labels = c("anterior", "posterior"))+ ### mPFC-STS
+  scale_x_discrete(limits=c("inside", "outside"), labels=c("inside window", "outside window"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle("vmPFC-STS
+  supercluster")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+#dev.off()
+#ggsave("vmpfc_sts.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+
+
+```
+
+### Cingulo-opercular supercluster
+```{r, fig.height=4,fig.width=4}
+
+## define the cluster 
+data_SC<-subset(data_LOO, supercluster=="1")
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("amnesia","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/windows_CO.tiff", units="in", width=5, height=4.5, res=1000)
+ggplot(stats, aes(x=amnesia, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity") +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  labs(fill="") +
+  scale_fill_manual(values=c('#152370','#6577a1'), labels = c("anterior", "posterior"))+ 
+  scale_x_discrete(limits=c("inside", "outside"), labels=c("inside window", "outside window"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle("cingulo-opercular
+  supercluster")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+#dev.off()
+#ggsave("cingulo-operc.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+### Dorsal frontal parietal supercluster
+```{r, fig.height=4,fig.width=4}
+
+## define the cluster 
+data_SC<-subset(data_LOO, supercluster=="2")
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("amnesia","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/windows_dFP.tiff", units="in", width=5, height=4.5, res=1000)
+ggplot(stats, aes(x=amnesia, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  labs(fill="") +
+  scale_fill_manual(values=c('#4bf52a','#a2f792'), labels = c("anterior", "posterior"))+ 
+  scale_x_discrete(limits=c("inside", "outside"), labels=c("inside window", "outside window"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle("dorsal frontal parietal
+  supercluster")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+#dev.off()
+#ggsave("dorsalFPN.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+
+
+### Entorhinal supercluster
+```{r, fig.height=4,fig.width=4}
+
+## define the cluster 
+data_SC<-subset(data_LOO, supercluster=="6")
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("amnesia","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/windows_EC.tiff", units="in", width=5, height=4.5, res=1000)
+ggplot(stats, aes(x=amnesia, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  labs(fill="") +
+  scale_fill_manual(values=c('#28fcfc','#bfffff'), labels = c("anterior", "posterior"))+ 
+  scale_x_discrete(limits=c("inside", "outside"), labels=c("inside window", "outside window"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle("entorhinal
+  supercluster")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+#dev.off()
+#ggsave("entorhinal.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+### Medial parietal supercluster
+```{r, fig.height=4,fig.width=4}
+
+## define the cluster 
+data_SC<-subset(data_LOO, supercluster=="5")
+
+## summarize for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("amnesia","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot
+#tiff("~/Downloads/windows_parietal.tiff", units="in", width=5, height=4.5, res=1000)
+ggplot(stats, aes(x=amnesia, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity") +
+  theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  labs(fill="") +
+  scale_fill_manual(values=c('#fa750f','#faa666'), labels = c("anterior", "posterior"))+
+  scale_x_discrete(limits=c("inside", "outside"), labels=c("inside window", "outside window"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle("medial parietal
+  supercluster")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+#dev.off()
+#ggsave("medialparietal.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+
+### Parahippocampal supercluster
+
+This cluster is not part of LOO analysis so running stats and plot separately 
+```{r, fig.height=4.5,fig.width=5}
+
+## read in the data, CHANGE TO YOUR PATH 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data <- read.table(paste(dir, "/supercluster_antpost_betas_by_age.txt", sep=""), header = TRUE)
+
+## get correct age range 
+data<-subset(data, ((age>18 & age<26) | age>35))
+
+## collapse over hem
+data_ag_hem<-aggregate(data[, "beta"], by=(list(data$subj, data$roi, data$age, data$supercluster)), mean)
+colnames(data_ag_hem)<-c("subj","ax","age","supercluster","beta")
+
+## define supercluster
+data_SC<-subset(data_ag_hem, supercluster=="4")
+
+## create lable for inside and outside infantile amnesia window 
+data_SC<-data_SC %>%
+  mutate(amnesia=case_when(age<26 ~ "inside",
+                      age>35 ~ "outside"))
+
+## model 
+model<- lme((beta) ~ ax*amnesia, random=~amnesia|subj,  weights=varComb(varIdent(form=~1|amnesia), varPower(form=~fitted(.))), data=data_SC, control = lmeControl(msMaxIter=1000, msMaxEval=1000), na.action=na.omit)
+
+## diagnostics 
+# hist(residuals(model))
+# ##check for homogeneity of variance
+# plot(model) #should look fairly uniform and random
+# qqnorm(resid(model))
+# qqline(resid(model))
+# icc(model)
+
+## stats 
+anova(model)
+
+## posthocs 
+emmeans(model, list(pairwise ~ amnesia*ax), adjust = "fdr")
+emmeans(model, list(pairwise ~ amnesia), adjust = "fdr")
+
+## format for plotting 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("amnesia","ax"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+#tiff("~/Downloads/windows_PH.tiff", units="in", width=5, height=4.5, res=1000)
+ggplot(stats, aes(x=amnesia, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+ theme(axis.title = element_text(size=24),  axis.ticks.x=element_blank(), text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=22), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  labs(fill="") +
+  scale_fill_manual(values=c('#f5200c','#fc9288'), labels = c("anterior", "posterior"))+ 
+  scale_x_discrete(limits=c("inside", "outside"), labels=c("inside window", "outside window"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle("parahippocampal
+  supercluster")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+#dev.off()
+#ggsave("parahippocampal.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
