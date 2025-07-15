@@ -1,0 +1,73 @@
+---
+title: "Plot individual cluster profiles comprising the superclusters"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script plots the connectivity profiles for individual clusters that comprise the superclusters. See "Neocortical Cluster Label" column of Table S1 for information on cluster numbers. 
+
+Input: Hippo_BinxAxis_F_betas.txt
+
+Output: individual cluster profile for whichever desired cluster. Figs S5-10 D panels.
+
+# Packages and functions
+```{r}
+
+library(nlme)
+library(ggplot2)
+library(emmeans)
+
+```
+
+# Read in and format the data 
+```{r}
+## read in the data 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data <- read.table(paste(dir, "/GitHub/Hippo_BinxAxis_F_betas.txt", sep=""), header = TRUE) 
+
+## collapse over hem 
+data_ag_hem<-aggregate(data[, "beta"], by=(list(data$subj, data$ax, data$bin, data$clust)), mean)
+colnames(data_ag_hem)<-c("subj","ax","bin","clust","beta")
+
+## separate into ant and post and subtract 
+data_ag_hem_ant<-subset(data_ag_hem, ax=="ant")
+data_ag_hem_post<-subset(data_ag_hem, ax=="post")
+ant_post<-data_ag_hem_ant$beta-data_ag_hem_post$beta
+
+## make new dataset 
+data_ap<-cbind(data_ag_hem_ant, ant_post)
+data_ap<-subset(data_ap, select=-c(ax,beta)) 
+
+```
+
+# Plot 
+```{r}
+
+## specify which subcluster you want to look at 
+data_clust<-subset(data_ap, clust=="26") ### CHANGE NUMBER OF CLUSTER HERE 
+
+## model 
+model<-lme(ant_post ~ as.factor(bin), random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## extract emmean and se 
+plot_summary <-emmeans(model, specs = c("bin")) #se is between subjects here 
+stats <- as.data.frame(plot_summary)
+
+## plot 
+ggplot(stats, aes(x=bin, y=emmean)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower.CL, ymax=upper.CL))+
+  labs(x="", y="ant-post connectivity") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1), breaks=seq(-0.1,0.1,.02))+
+  geom_hline(yintercept=0)+
+  ggtitle("29")+
+  theme(plot.title = element_text(size=18, face="bold", hjust=0.5))
+
+
+```
