@@ -1,0 +1,50 @@
+---
+title: "Plot Age Distribution"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script plots the distribution of ages examined. 
+
+Input: babyhippos_demos.csv
+
+Output: Fig. S14
+
+# Packages and functions
+```{r}
+
+library(ggplot2)
+
+```
+
+# Read in the data 
+```{r}
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos" ## CHANGE TO YOUR DIRECTORY 
+
+demos <- read.table(paste(dir, "/GitHub/babyhippos_demos.csv", sep="") ,sep=",", header = TRUE) 
+```
+
+# Plot participant ages by bin 
+```{r, fig.height=3.5,fig.width=8}
+
+ggplot(demos, aes(x=age)) +
+  geom_histogram(color="steelblue",fill="steelblue", binwidth=1) +
+  theme_classic() +
+  labs(x="age (months)", y="count") +
+  geom_hline(yintercept=0)+
+  theme(axis.title = element_text(size=14), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=12)) +
+  # scale_x_continuous(breaks=c(0, 6, 12, 18, 25), expand=c(0,0)) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,5))+
+  scale_y_continuous(expand=c(0,0)) +
+  geom_vline(xintercept = 6.5, color="black", linetype="dashed") +
+  geom_vline(xintercept = 12.5, color="black", linetype="dashed") +
+  geom_vline(xintercept = 18.5, color="black", linetype="dashed") +
+  geom_vline(xintercept = 25.5, color="black", linetype="dashed") 
+
+
+```
+
+
+
