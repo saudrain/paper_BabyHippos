@@ -1,0 +1,348 @@
+---
+title: "Average anterior-posterior difference plots"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script takes matrices from ClustRobust.m, which are adjacency matrix that show where clustering is consistent across people. It reads this information in and selectively averages together the anterior-posterior difference in connectivity to each supercluster based on where there is 100% clustering consistency. 
+
+This is different from R_supercluster_stats.Rmd which extracts for anterior and posterior connectivity separately rather than the difference in anterior psoterior connectivity. 
+
+The script then plots the average anterior-posterior difference in connectivity for each supercluster and age bin, which are the plots in Fig. S5C, Fig. S6C, Fig. S7C, Fig. S8B, Fig S9B, and Fig. S10B
+
+Input: threshMat.csv and Hippo_BinxAxis_F_betas.txt 
+
+# Packages and functions
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(nlme)
+library(Rmisc)
+library(ggplot2)
+
+```
+
+# Selective averaging the ant-post difference within each supercluster 
+
+```{r}
+
+#### read in binarized, thresholded matrix. 1 is where clustering was consistent across all subjects, 0 was inconsistent 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data_threshMat <- read.csv(paste(dir, "/GitHub/threshMat.csv", sep=""), header = FALSE) 
+
+### get rid of diagonal and lower triangle 
+diag(data_threshMat)<-0
+data_threshMat[lower.tri(data_threshMat)]<-0
+
+### read in our original data and format it for our purposes 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data <- read.table(paste(dir, "/GitHub/Hippo_BinxAxis_F_betas.txt", sep=""), header = TRUE) 
+### use only top 44 for cluster threshold of 10
+data<-subset(data, clust < 45)
+
+## collapse over hem for each subj 
+data_ag_hem<-aggregate(data[, "beta"], by=(list(data$subj, data$ax, data$bin, data$clust)), mean)
+colnames(data_ag_hem)<-c("subj","ax","bin","clust","beta")
+
+## separate into ant and post and subtract 
+data_ag_hem_ant<-subset(data_ag_hem, ax=="ant")
+data_ag_hem_post<-subset(data_ag_hem, ax=="post")
+ant_post<-data_ag_hem_ant$beta-data_ag_hem_post$beta
+
+## make new dataset of ap difference collapsed over hem for each subj 
+data_ap2<-cbind(data_ag_hem_ant, ant_post)
+data_ap2<-subset(data_ap2, select=-c(ax,beta)) 
+
+#### specify which rois go into each supercluster and append to our ap2 data 
+supercluster_1<-c(1,6,7,28,34,36,41,43)
+supercluster_2<-c(2,3,9,11,13,14,16,19,20,22,24,30,31,32,37,38,40,44)
+supercluster_3<-c(4,15,17,23,25,26,29,33,35,39)
+supercluster_4<-c(5,10)
+supercluster_5<-c(8,12,27,42)
+supercluster_6<-c(18,21)
+
+data_ap2<-mutate(data_ap2, supercluster = case_when(clust %in% supercluster_1 ~ 1,
+                                                    clust %in% supercluster_2 ~ 2,
+                                                    clust %in% supercluster_3 ~ 3,
+                                                    clust %in% supercluster_4 ~ 4,
+                                                    clust %in% supercluster_5 ~ 5,
+                                                    clust %in% supercluster_6 ~ 6))
+
+### initialize some empty lists to append to later, for each supercluster 
+data_sc_1<-data.frame(matrix(nrow=0, ncol=5))
+colnames(data_sc_1)<-c("subj","bin","superclust","beta")
+
+data_sc_2<-data.frame(matrix(nrow=0, ncol=5))
+colnames(data_sc_2)<-c("subj","bin","superclust","beta")
+
+data_sc_3<-data.frame(matrix(nrow=0, ncol=5))
+colnames(data_sc_3)<-c("subj","bin","superclust","beta")
+
+data_sc_4<-data.frame(matrix(nrow=0, ncol=5))
+colnames(data_sc_4)<-c("subj","bin","superclust","beta")
+
+data_sc_5<-data.frame(matrix(nrow=0, ncol=5))
+colnames(data_sc_5)<-c("subj","bin","superclust","beta")
+
+data_sc_6<-data.frame(matrix(nrow=0, ncol=5))
+colnames(data_sc_6)<-c("subj","bin","superclust","beta")
+
+
+### loop through matrix and when there is a 1, average the two roi hippo-cortical conn values together 
+for (r in 1:nrow(data_threshMat)) { 
+  
+  for (c in 1:ncol(data_threshMat)) {
+    
+    if (data_threshMat[r,c]==1){
+      
+      #print("yes")
+      
+      temp_subset<-subset(data_ap2, (clust==r | clust==c))
+      
+      ### average across clust 
+      temp_agg<-aggregate(temp_subset[, "ant_post"], by=(list(temp_subset$subj,temp_subset$bin, temp_subset$supercluster)), mean)
+      colnames(temp_agg)<-c("subj","bin","superclust","beta")
+      
+      if (temp_agg[1,"superclust"]=="1") {
+        data_sc_1<-rbind(data_sc_1, temp_agg)
+      }
+      
+      if (temp_agg[1,"superclust"]=="2") {
+        data_sc_2<-rbind(data_sc_2, temp_agg)
+      }
+      
+      if (temp_agg[1,"superclust"]=="3") {
+        data_sc_3<-rbind(data_sc_3, temp_agg)
+      }
+      
+      if (temp_agg[1,"superclust"]=="4") {
+        data_sc_4<-rbind(data_sc_4, temp_agg)
+      }
+      
+      if (temp_agg[1,"superclust"]=="5") {
+        data_sc_5<-rbind(data_sc_5, temp_agg)
+      }
+      
+      if (temp_agg[1,"superclust"]=="6") {
+        data_sc_6<-rbind(data_sc_6, temp_agg)
+      }
+      
+    }
+    
+  }
+  
+}
+  
+
+### average per participant for each supercluster 
+data_sc_1<-aggregate(data_sc_1[, "beta"], by=(list(data_sc_1$subj, data_sc_1$bin)), mean)
+colnames(data_sc_1)<-c("subj","bin","beta")
+data_sc_1$supercluster<-1
+
+data_sc_2<-aggregate(data_sc_2[, "beta"], by=(list(data_sc_2$subj, data_sc_2$bin)), mean)
+colnames(data_sc_2)<-c("subj","bin","beta")
+data_sc_2$supercluster<-2
+
+data_sc_3<-aggregate(data_sc_3[, "beta"], by=(list(data_sc_3$subj, data_sc_3$bin)), mean)
+colnames(data_sc_3)<-c("subj","bin","beta")
+data_sc_3$supercluster<-3
+
+## nothing in this one, parahippocampal 
+# data_sc_4<-aggregate(data_sc_4[, "beta"], by=(list(data_sc_4$subj, data_sc_4$bin)), mean)
+# colnames(data_sc_4)<-c("subj","bin","beta")
+# data_sc_4$supercluster<-4
+
+data_sc_5<-aggregate(data_sc_5[, "beta"], by=(list(data_sc_5$subj, data_sc_5$bin)), mean)
+colnames(data_sc_5)<-c("subj","bin","beta")
+data_sc_5$supercluster<-5
+
+data_sc_6<-aggregate(data_sc_6[, "beta"], by=(list(data_sc_6$subj, data_sc_6$bin)), mean)
+colnames(data_sc_6)<-c("subj","bin","beta")
+data_sc_6$supercluster<-6
+
+
+```
+
+
+# Plotting the average ant-post difference per supercluster
+
+## Cingulo-opercular supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+data_SC<-data_sc_1 ### this is weighted averaged data across component clusters 
+
+## prepare to plot 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8, fill="steelblue") + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="ant-connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1), breaks=seq(-0.1,0.1,.02))+
+  geom_hline(yintercept=0)+
+  ggtitle(" ")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+
+#ggsave("cingulo-operc.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## Dorsal frontal parietal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+
+data_SC<-data_sc_2 ### this is weighted averaged data across component clusters 
+
+## prepare to plot 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8, fill="steelblue") + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="ant-connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1), breaks=seq(-0.1,0.1,.02))+
+  geom_hline(yintercept=0)+
+  ggtitle(" ")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+
+#ggsave("dorsalFPN.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## mPFC-STS supercluster 
+```{r, fig.height=4,fig.width=4.5}
+
+data_SC<-data_sc_3 ### this is weighted averaged data across component clusters 
+
+## prepare to plot 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8, fill="steelblue") + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="ant-connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1), breaks=seq(-0.1,0.1,.02))+
+  geom_hline(yintercept=0)+
+  ggtitle(" ")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+
+#ggsave("vmpfc_sts.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## Medial parietal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+data_SC<-data_sc_5 ### this is weighted averaged data across component clusters 
+
+## prepare to plot 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8, fill="steelblue") + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="ant-connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1), breaks=seq(-0.1,0.1,.02))+
+  geom_hline(yintercept=0)+
+  ggtitle(" ")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+
+#ggsave("medialparietal.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## Entorhinal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+data_SC<-data_sc_6 ### this is weighted averaged data across component clusters 
+
+## prepare to plot 
+stats<-summarySE(data=data_SC, measurevar = "beta", groupvars = c("bin"), na.rm=TRUE)
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=beta)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8, fill="steelblue") + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="ant-connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.2,0.2), breaks=seq(-0.2,0.2,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(" ")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+
+#ggsave("entorhinal.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+## Parahippocampal supercluster
+```{r, fig.height=4,fig.width=4.5}
+
+data_SC<-subset(data_ap2, supercluster==4) ### not plotting weighted average here because the two clusters comprising this supercluster were not clustered together 100% of the time. This is the un-weighted data. 
+
+## prepare to plot 
+stats<-summarySE(data=data_SC, measurevar = "ant_post", groupvars = c("bin"), na.rm=TRUE)
+stats$upper_se<-stats$ant_post + stats$se
+stats$lower_se<-stats$ant_post - stats$se
+
+## plot 
+ggplot(stats, aes(x=bin, y=ant_post)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8, fill="steelblue") + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="ant-connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_x_discrete(limits=c("1", "2", "3", "4"), labels=c("0-6mo", "7-12mo", "13-18mo","19-25mo"))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.2,0.2), breaks=seq(-0.2,0.2,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(" ")+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom")
+
+#ggsave("parahippocampal.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+```
+
+
+
+
