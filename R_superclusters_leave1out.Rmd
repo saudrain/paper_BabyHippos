@@ -1,0 +1,90 @@
+---
+title: "Supercluster Crossvalidation"
+output: html_notebook
+---
+Version 1.0, July 2025, SA
+
+For leave1out crossvalidation purposes, this script provides 212 clustering solutions leaving a subject out each time. 
+
+- Input: Hippo_BinxAxis_F_betas.txt and subj_list_n212.txt
+- Output: clusters_leave1out.txt
+  - cluster assignment for ROI x nsubject iterations
+
+# Packages and functions
+```{r}
+
+library(tidyr)
+
+```
+
+# Read in the data
+
+```{r}
+
+## CHANGE TO YOUR DIRECTORY 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+
+data <- read.table(paste(dir, "/Hippo_BinxAxis_F_betas.txt", sep=""), header = TRUE) 
+
+subj_list <- read.table(paste(dir, "/subj_list_n212.txt", sep=""), header = FALSE) 
+
+```
+
+# Cluster across 212 iterations, leaving a subject out each time 
+```{r}
+
+### keep only the top 44 clusters, which corresponds to a cluster threshold of 10 
+data<-subset(data, clust < 45)
+
+### initialize vector of cluster labels for the 44 clusters to append to 
+data_cluster_labels<- data.frame(cluster_labels = 1:44)
+
+for (s in 1:nrow(subj_list)) {
+  
+  #print(subj_list[s,])
+  
+  ## remove a given subject's data
+  data_subset<-data[!grepl(subj_list[s,], data$subj),]
+
+  ## Average across subject and hemisphere to get one value per cluster, excluding the left-out subject
+  data_ag<-aggregate(data_subset[, "beta"], by=(list(data_subset$ax, data_subset$bin, data_subset$clust)), mean)
+  colnames(data_ag)<-c("ax","bin","clust","beta")
+
+  ### get the data into a format we can cluster 
+  ## add a column that is ax x bin 
+  data_ag$cond<-paste(data_ag$ax, data_ag$bin, sep="_bin")
+  ## drop the other columns 
+  data_ag<-data.frame(data_ag[,c("clust","beta","cond")])
+  ## wide format, want one row per cluster. Betas in the cells. 
+  data_clust<-spread(data_ag, cond, beta)
+  ## save cluster labels
+ ## data_cluster_labels<-data.frame(data_clust$clust) ## because already have above and dont need to get a million times? 
+  
+  ### subtract posterior from anterior betas 
+  bin1<-data_clust$ant_bin1 - data_clust$post_bin1
+  bin2<-data_clust$ant_bin2 - data_clust$post_bin2
+  bin3<-data_clust$ant_bin3 - data_clust$post_bin3
+  bin4<-data_clust$ant_bin4 - data_clust$post_bin4
+  
+  ### save into a dataset 
+  data_clust2<-data.frame(cbind(bin1,bin2,bin3,bin4)) ## formerly data_clust2
+  ##data_clust2_labelled<-cbind(data_cluster_labels, data_clust2) ## formerly data_ap
+
+  ## turn it into a euclidean distance matrix
+  distance.matrix <- dist(data_clust2, method="euclidean")
+
+  ## cluster the distance matrix based on ward's method
+  hierarchical.cluster <- hclust(distance.matrix)
+
+  ## save clusters, we are choosing 6 based on some diagnostics (SEE ???????????????????????????)
+  cluster_assignment <- data.frame(clusters=cutree(hierarchical.cluster, k=6))
+
+  data_cluster_labels[,s+1] <- cluster_assignment
+
+}
+
+# write.table(data_cluster_labels, file = "clusters_leave1out.txt", sep = " ", row.names = FALSE, col.names = TRUE, quote = FALSE, na="")
+
+```
+
+
