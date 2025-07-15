@@ -1,0 +1,441 @@
+---
+title: "Hemisphere x Long-Axis Interaction"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script plots hippocampal connectivity with neocortical clusters identified by a significant hemisphere x long-axis interaction. 
+
+Input: Hippo_AxisxHem_F_betas.txt
+
+Output: Plots in Fig S3C
+
+# Packages and functions
+```{r}
+
+library(nlme)
+library(ggplot2)
+library(emmeans)
+library(Rmisc)
+
+```
+
+# Read in the data 
+```{r}
+
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos"
+data <- read.table(paste(dir, "/GitHub/Hippo_AxisxHem_F_betas.txt", sep=""), header = TRUE) 
+data <- subset(data, clust < 13) ## when threshold out clusters <10 voxels, top 12
+
+```
+
+# Plots
+## cluster 1
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="1")
+
+## colours 
+clrs<-c('#fa1111','#fc9a9a') ### cluster 1
+
+## name of clust for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 2
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="2")
+
+## colours 
+clrs<-c('#02ebf7','#a4f9fc') ### cluster 2
+
+## name of clust for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 3
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="3")
+
+## colours 
+clrs<-c('#faea05','#faf27f') ### cluster 3
+
+## name of clust for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 4
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="4")
+
+## colours 
+clrs<-c('#02fa13','#96ff9e') ### cluster 4
+
+## name of clust for plot below 
+clust_num<- data_clust[1,"clust"]
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 5
+```{r}
+## note, removed some clusters that were in white matter and cerebellum, hence the numbers shift a bit
+
+## specify cluster 
+data_clust<-subset(data, clust=="6")
+
+## colours 
+clrs<-c('#fc00ec','#ff94f8') ### cluster 6 (now 5)
+
+## name of clust for plot below 
+clust_num<- "5"
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 6
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="7")
+
+## colours 
+clrs<-c('#fa9702','#fcc46f') ### cluster 7 (6)
+
+## name of clust for plot below 
+clust_num<- "6"
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 7
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="8")
+
+## colours 
+clrs<-c('#011175','#4451ab') ### cluster 8 (7)
+
+## name of clust for plot below 
+clust_num<- "7"
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 8
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="10")
+
+## colours 
+clrs<-c('#5c2902','#8f684a') ### cluster 10 (8)
+
+## name of clust for plot below 
+clust_num<- "8"
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+## cluster 9
+```{r}
+
+## specify cluster 
+data_clust<-subset(data, clust=="11")
+
+## colours 
+clrs<-c('#144a03','#83b576') ### cluster 11 (9)
+
+## name of clust for plot below 
+clust_num<- "9"
+
+## model 
+model<-lme(beta ~ ax*hem, random= ~1|subj, data=data_clust, na.action=na.omit)
+
+## prepare to plot 
+## use estimated marginal melans 
+plot_summary <-emmeans(model, specs = c("ax","hem")) #se is not for within subject data here
+plot_summary_df <- as.data.frame(plot_summary)
+## use within subject se 
+stats<-summarySEwithin(data=data_clust, measurevar = "beta", withinvars = c("hem","ax"), idvar = "subj", na.rm=TRUE)
+## add estiamted marginal mean to the stats dataset 
+stats$upper_se<-stats$beta + stats$se
+stats$lower_se<-stats$beta - stats$se
+
+## plot 
+ggplot(stats, aes(x=hem, y=beta, fill=ax)) + 
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", width = 0.8) + 
+  geom_errorbar(width = .0, position = position_dodge(0.8), aes(ymin=lower_se, ymax=upper_se))+
+  labs(x="", y="connectivity (Fisher z)") +
+  theme(axis.title = element_text(size=20), axis.ticks.x=element_blank()) +
+  theme(axis.text=element_text(size=14))+
+  labs(fill="") +
+  scale_fill_manual(values=clrs, labels = c("ant", "post"))+ ### mPFC-STS
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.25), breaks=seq(0,0.25,.05))+
+  geom_hline(yintercept=0)+
+  ggtitle(clust_num)+
+  theme(plot.title = element_text(size=22, face="bold", hjust=0.5), legend.position="bottom", legend.text=element_text(size=14))
+
+#ggsave("temp.png", path="~/Downloads", width = 4.5, height = 4.5)
+
+
+```
+
+
+
