@@ -1,0 +1,178 @@
+---
+title: "tSNR analyses"
+output: html_notebook
+---
+
+Version 1.0, July 2025, SA
+
+This script plots mean and standard deviation of connectivity across the age bins examined. 
+
+Input: Mean_and_SD_cortical_conn_Schaefer2018_200Parcels.csv
+
+Output: Figs S12 and S13
+
+# Read in packages 
+```{r}
+
+library(ggplot2)
+library(dplyr)
+
+```
+
+# Read in and prepare the data 
+```{r}
+## Read in the data 
+dir<-"/Users/audrainsp/Library/CloudStorage/OneDrive-NationalInstitutesofHealth/BabyHippos/R_BabyHippos/GitHub"
+data<- read.csv(paste(dir, "/Mean_and_SD_cortical_conn_Schaefer2018_200Parcels.csv", sep=""), header = TRUE) 
+
+## subset appropriate age ranges 
+data<-subset(data, (age<26 | age>35) )
+
+attach(data)
+
+```
+
+# Without regressing out motion 
+
+## Variability of connectivity 
+```{r, fig.height=4,fig.width=7}
+
+## correlation
+cor.test(age,sd)
+
+## Plot 
+ggplot(data, aes(y=sd, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="black") + 
+  theme_classic() +
+  theme(text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=18), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  #scale_y_continuous(expand = c(0, 0), limits = c(0,0.3), breaks=seq(0,0.3,.05))+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,5))+
+  scale_y_continuous(limits = c(0.28,0.38), breaks=seq(0.28,0.38,.01))+
+  labs(y = "standard deviation
+       ",
+       x = "age (months)",
+       title = "")
+
+#ggsave("sd_5bins.png", path="~/Downloads", width = 7, height = 4)
+
+```
+## Mean connectivity 
+```{r, fig.height=4,fig.width=7}
+
+## correlation
+cor.test(age,mean)
+
+## plot 
+ggplot(data, aes(y=mean, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="black") + 
+  theme_classic() +
+  theme(text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=18), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,5))+
+  scale_y_continuous(limits = c(0,0.6), breaks=seq(0,0.6,.1))+
+  labs(y = "mean connectivity
+       ",
+       x = "age (months)",
+       title = "")
+
+#ggsave("mean_5bins.png", path="~/Downloads", width = 7, height = 4)
+
+
+```
+
+# After regressing out motion
+
+## Variability of connectivity 
+```{r, fig.height=4,fig.width=7}
+
+m1<-lm(sd~mean_DiffMag, data=data)
+mean_sd<-mean(data$sd) ## to add back in so scale makes sense 
+#resid(m1)
+
+ggplot(data, aes(y=resid(m1)+mean_sd, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) + 
+  geom_smooth(method="loess", level=0.95, col="black") + 
+  theme_classic() +
+  theme(text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=18), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,5))+
+  scale_y_continuous(limits = c(0.28,0.38), breaks=seq(0.28,0.38,.01))+
+  labs(y = "standard deviation
+       (controlling for mean motion)",
+       x = "age (months)",
+       title = "")
+
+#ggsave("sd_5bins_nomotion.png", path="~/Downloads", width = 7, height = 4)
+```
+
+## Mean connectivity 
+```{r, fig.height=4,fig.width=7}
+m1<-lm(mean~mean_DiffMag, data=data)
+mean_mean<-mean(data$mean) ## to add back in so scale makes sense 
+
+ggplot(data, aes(y=resid(m1)+mean_mean, x=age)) + 
+  geom_vline(xintercept = 6, color="grey", linetype="solid") +
+  geom_vline(xintercept = 12, color="grey", linetype="solid") +
+  geom_vline(xintercept = 18, color="grey", linetype="solid") +
+  geom_vline(xintercept = 25, color="grey", linetype="solid") +
+  geom_point(size=2, alpha=0.7) +  
+  geom_smooth(method="loess", level=0.95, col="black") + 
+  theme_classic() +
+  theme(text = element_text(size = 18), axis.text.x = element_text(size=18), axis.text.y = element_text(size=18), plot.title = element_text(face="bold", hjust=0.5, size=22), legend.position="none")+
+  scale_shape_manual(values=c(20))+
+  guides(shape = FALSE, size = FALSE)+
+  scale_x_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,5))+
+  scale_y_continuous(limits = c(0,0.6), breaks=seq(0,0.6,.1))+
+  labs(y = "mean connectivity 
+       (controlling for mean motion)",
+       x = "age (months)",
+       title = "")
+
+#ggsave("mean_5bins_nomotion.png", path="~/Downloads", width = 7, height = 4)
+
+```
+
+# Assessing mean conn inside and outside of infantile amnesia window 
+
+```{r}
+
+## t test of mean connectivity in participants within and outside the infantile amnesia window 
+## create lable for AI and A
+data<-data %>%
+  mutate(amnesia=case_when(age<26 ~ "inside",
+                      age>35 ~ "outside"))
+data_restricted<-subset(data, (age>18 & age<26) | age>35)
+
+## mean conn 
+m1<-lm(mean~mean_DiffMag, data=data_restricted)
+t.test(resid(m1) ~ data_restricted$amnesia)
+
+
+```
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
