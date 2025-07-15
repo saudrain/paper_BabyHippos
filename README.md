@@ -36,12 +36,12 @@ These software packages must be installed on your local machine in order to run 
 
 ## Main Analyses
 
-R_hierarchical_clustering.nb.html
+R_hierarchical_clustering.Rmd
 - This script clusters the clusters resulting from a long-axis x age bin interaction into superclusters that share similar profiles of connectivity with the anteroposterior hippocampus (as visualized in Figure 4A). It also plots several cluster quality checks (including supplemental plots in Fig.S1.B-E)
 - Input: Hippo_BinxAxis_F_betas.txt
 - Output: supercluster solution (visualized in Figure 4A) and supplemental plots in Fig.S1.B-E
 
-R_superclusters_leave1out.nb.html
+R_superclusters_leave1out.Rmd
 - For leave1out crossvalidation purposes, this script provides 212 clustering solutions leaving a subject out each time
 - Input: Hippo_BinxAxis_F_betas.txt and subj_list_n212.txt
 - Output: clusters_leave1out.txt
@@ -52,14 +52,14 @@ ClustRobust.m
 - Input: clusters_leave1out.txt
 - Output: threshMat.csv and adjMat.csv
 
-R_superclusters_stats.nb.html
+R_superclusters_stats.Rmd
 - This script calculates a weighted average of data clustered together 100% consistently across leave1out iterations, and runs the statistical comparisons for each supercluster. It plots the supercluster connectivity profiles in Figure 4. It also runs the statistical analyses and plots for inside vs outside infantile amnesia window comparisons (Figure 5)
 - Input: threshMat.csv, Hippo_BinxAxis_F_betas.txt, supercluster_antpost_betas_by_age.txt
 - Output: Figures 4 and 5 plots, statistical comparisons
 
 ## Supplemental Analyses and Figures
 
-supplemental_plot_consistency_matrices
+supplemental_plot_consistency_matrices.Rmd
 - This script creates plots of the clustering consistency matrices
 - Input: adjMat.csv and data_cluster_labels.csv (output from ClustRobust.m and R_superclusters_stats.Rmd)
 - Output: Fig. S1F matrices
